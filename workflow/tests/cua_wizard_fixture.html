@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Synthetic no-submit wizard</title>
+<body><h1>Synthetic no-submit rehearsal fixture</h1><p>This page accepts only disposable fixture data.</p>
+<section id="contact-step"><label for="generated-email">Email</label><input id="generated-email" name="email" required><label for="phone">Phone</label><input id="phone" required><button id="next-contact" type="button">Next</button></section>
+<section id="resume-step" hidden><input id="resume" type="file" accept="application/pdf" hidden><button id="choose-resume" type="button">Choose resume</button><span id="filename"></span><button id="next-resume" type="button">Next</button></section>
+<section id="questions-step" hidden><label for="years">Years experience</label><input id="years" required><label for="authorized">Authorized to work</label><input id="authorized" type="checkbox"><div id="unknown-question" hidden><label for="salary">Mandatory salary</label><input id="salary"></div><button id="review-button" type="button">Review</button></section>
+<section id="review-step" hidden><h2>Review</h2><dl><dt>Email</dt><dd id="summary-email"></dd><dt>Phone</dt><dd id="summary-phone"></dd><dt>Years experience</dt><dd id="summary-years"></dd><dt>Authorized to work</dt><dd id="summary-authorized"></dd><dt>Resume</dt><dd id="summary-resume"></dd></dl><button id="submit-button" type="button" disabled>Submit application</button><p>Submission is disabled in this fixture.</p></section>
+<script>
+const byId=id=>document.getElementById(id);
+window.fixtureMetrics={next:0,review:0,submit:0};
+function show(id){for(const step of ['contact-step','resume-step','questions-step','review-step'])byId(step).hidden=step!==id;}
+byId('next-contact').onclick=()=>{if(!byId('generated-email').value||!byId('phone').value)return;window.fixtureMetrics.next++;show('resume-step');};
+byId('choose-resume').onclick=()=>byId('resume').click();byId('resume').onchange=()=>byId('filename').textContent=byId('resume').files[0]?.name||'';
+byId('next-resume').onclick=()=>{if(!byId('resume').files.length)return;window.fixtureMetrics.next++;show('questions-step');};
+if(new URLSearchParams(location.search).get('unknown')==='1'){byId('unknown-question').hidden=false;byId('salary').required=true;}
+byId('review-button').onclick=()=>{if(!byId('years').value)return;window.fixtureMetrics.review++;for(const key of ['email','phone','years'])byId('summary-'+key).textContent=(key==='email'?byId('generated-email'):byId(key)).value;byId('summary-authorized').textContent=byId('authorized').checked?'Yes':'No';byId('summary-resume').textContent=byId('resume').files[0]?.name||'';show('review-step');};
+</script></body></html>

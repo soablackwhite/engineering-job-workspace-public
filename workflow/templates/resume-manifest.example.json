@@ -1,0 +1,15 @@
+{
+  "candidate_commit": "REPLACE_WITH_REVIEWED_PRIVATE_SOURCE_REVISION",
+  "name": "Example Candidate",
+  "title": "Example Engineer",
+  "language": "English",
+  "source_path": "approved-source.txt",
+  "pdf_path": "approved.pdf",
+  "source_sha256": null,
+  "pdf_sha256": null,
+  "required_pages": 1,
+  "sections": ["Experience", "Education"],
+  "required_entries": ["Example Candidate"],
+  "employment_provenance": [{"evidence_ids": ["REPLACE_WITH_REVIEWED_PRIVATE_EVIDENCE_ID"]}],
+  "coverage": {}
+}

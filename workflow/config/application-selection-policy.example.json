@@ -1,0 +1,21 @@
+{
+  "version": "2026-10-26-fde-abroad-v1",
+  "enabled": false,
+  "allowed_role_families": [
+    "forward_deployed_engineer",
+    "solutions_engineer"
+  ],
+  "exclude_junior": true,
+  "allowed_countries": [
+    "US",
+    "GB"
+  ],
+  "gb_location": "London",
+  "minimum_annual_usd": 110000,
+  "compensation_basis": "base",
+  "require_new_visa_sponsorship": true,
+  "require_abroad_applicants": true,
+  "require_relocation_assistance": true,
+  "max_evidence_age_days": 30,
+  "current_cv_sha256": null
+}

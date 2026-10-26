@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Synthetic stored-resume no-submit wizard</title>
+<body><h1 id="fixture-job">Synthetic example job — not a real application</h1><p>Disposable references and a synthetic PDF only. Submission is disabled.</p>
+<section id="contact-step"><label for="candidate-reference">Candidate reference</label><input id="candidate-reference" required><label for="contact-reference">Contact reference</label><input id="contact-reference" required><button id="next-contact" type="button">Next</button></section>
+<section id="resume-step" hidden><div id="stored-card"><input id="resume" type="radio" checked aria-label="Selected synthetic resume"><span id="stored-filename">fixture-only.pdf</span><a id="download-resume" href="fixture-only.pdf" download="fixture-only.pdf">Download</a></div><button id="next-resume" type="button">Next</button></section>
+<section id="questions-step" hidden><label for="years">Years experience</label><input id="years" required><label for="authorized">Authorized to work</label><input id="authorized" type="checkbox"><button id="review-button" type="button">Review</button></section>
+<section id="review-step" hidden><h2>Review</h2><dl><dt>Candidate reference</dt><dd id="summary-candidate-reference"></dd><dt>Contact reference</dt><dd id="summary-contact-reference"></dd><dt>Years experience</dt><dd id="summary-years"></dd><dt>Authorized to work</dt><dd id="summary-authorized"></dd></dl><div id="review-stored-card"><input id="review-resume" type="radio" checked aria-label="Selected synthetic resume at review"><span id="review-filename">fixture-only.pdf</span><a id="review-download" href="fixture-only.pdf" download="fixture-only.pdf">Download</a></div><button id="submit-button" type="button" disabled>Submit application</button></section>
+<script>
+const byId=id=>document.getElementById(id);
+function show(id){for(const step of ['contact-step','resume-step','questions-step','review-step'])byId(step).hidden=step!==id;}
+byId('next-contact').onclick=()=>{if(byId('candidate-reference').value&&byId('contact-reference').value)show('resume-step');};
+byId('next-resume').onclick=()=>{if(byId('resume').checked)show('questions-step');};
+byId('review-button').onclick=()=>{if(!byId('years').value)return;for(const key of ['candidate-reference','contact-reference','years'])byId('summary-'+key).textContent=byId(key).value;byId('summary-authorized').textContent=byId('authorized').checked?'Yes':'No';show('review-step');};
+</script></body></html>

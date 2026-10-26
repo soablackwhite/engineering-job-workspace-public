@@ -1,0 +1,46 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: workflow/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Public source privacy boundary
+        run: |
+          python scripts/check_public_tree.py --history
+          python -m unittest discover -s scripts -p 'test_*.py'
+      - name: Install Python check dependencies
+        run: python -m pip install -r workflow/requirements.txt
+      - name: Python workflow checks
+        run: python -m unittest discover -s workflow/tests -p 'test_*.py'
+      - name: Node transport and synthetic browser checks (network disabled)
+        run: node --experimental-strip-types --import ./workflow/test-network-off.mjs --test tests/*.test.mjs workflow/tests/*.test.mjs
+      - name: Install locked application dependencies
+        run: npm ci
+      - name: TypeScript state and authentication checks (network disabled)
+        run: node --import tsx --import ./workflow/test-network-off.mjs --test workflow/tests/*.test.ts
+      - name: Typecheck
+        run: npm run check:types
+      - name: Build application (no deployment)
+        run: npm run build

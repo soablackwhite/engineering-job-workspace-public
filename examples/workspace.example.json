@@ -1,0 +1,12 @@
+{
+  "service_origin": "",
+  "receipt_account": "",
+  "supplemental_account": "",
+  "keychain_service": "",
+  "keychain_account": "",
+  "hermes_root": "",
+  "hermes_python": "",
+  "resume_manifest": ".private/resume/master-manifest.json",
+  "selection_policy": ".private/selection-policy.json",
+  "candidate_index": ".private/candidate-index.json"
+}
