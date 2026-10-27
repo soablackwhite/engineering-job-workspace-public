@@ -1,5 +1,6 @@
 import { sites } from '@openai/sites-vite-plugin';
 import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { createLogger, defineConfig } from 'vite';
@@ -55,6 +56,9 @@ export default defineConfig(async () => {
   }]))) : undefined;
 
   return {
+    // Shared node_modules must not mean shared optimizer output. Keep the
+    // node_modules/.vite prefix so Vinext skips CommonJS transforms on it.
+    cacheDir: path.join(root, 'node_modules', '.vite', `workspace-${createHash('sha256').update(root).digest('hex').slice(0, 16)}`),
     css: { postcss: { plugins: [tailwindcss()] } },
     customLogger: redactedLogger,
     server: {
