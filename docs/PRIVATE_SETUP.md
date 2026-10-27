@@ -2,6 +2,14 @@
 
 A fresh clone has no candidate data or permission to apply. Keep operational data in a separate access-controlled service or ignored `.private/` directory. Never commit a filled setup file, real document or production binding.
 
+## Recommended laptop setup
+
+Run `npm ci` and `npm run local`, then open the printed `/setup` address. The [guided laptop setup](LOCAL_SETUP.md) creates local storage, helps you select private note snapshots and a CV, and generates the supported Codex MCP connection command. No manual JSON configuration is needed for the local CRM and selected-source connection.
+
+The guided setup stores an unapproved PDF and unverified source evidence. It does not silently create an approved application manifest, a verified candidate index or execution grants. The Python pipeline and hosted service configuration below are advanced, separately reviewed operations.
+
+## Advanced pipeline and hosted configuration
+
 ```sh
 mkdir -p .private/resume
 cp examples/workspace.example.json .private/workspace.json

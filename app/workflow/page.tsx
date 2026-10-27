@@ -1,4 +1,5 @@
 'use client';
+import {workspaceFetch} from '@/lib/local-fetch';
 import {useEffect,useState} from 'react';
 import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from '@/components/ui/table';
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from '@/components/ui/sheet';
@@ -8,9 +9,9 @@ type Job={id:string;company:string;title:string;state:string;sources:string[];sn
 type State={exceptions?:{error:string;url?:string;stage?:string}[];paused:boolean;mode:string;jobs:Record<string,Job>;candidate:{needs_input?:{field:string;reason:string}[];requires_employer_visa_sponsorship?:boolean;base_documents?:string[]};documents:Record<string,{variant:string;pdf_sha256:string;pdf_available?:boolean;review?:{passed:boolean;issues:string[]}}>};
 export default function Workflow(){
  const [data,setData]=useState<State|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null);
- async function load(){try{const r=await fetch('/api/workflow',{cache:'no-store'});if(!r.ok)throw Error();setData((await r.json() as {state:State}).state);setError('');}catch{setError('The queue could not be loaded. Retry to see its current state.');}}
+ async function load(){try{const r=await workspaceFetch('/api/workflow',{cache:'no-store'});if(!r.ok)throw Error();setData((await r.json() as {state:State}).state);setError('');}catch{setError('The queue could not be loaded. Retry to see its current state.');}}
  useEffect(()=>{void load()},[]);
- async function pause(){setBusy(true);try{const r=await fetch('/api/workflow',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused:!data?.paused})});if(!r.ok)throw Error();await load();}catch{setError('Pause was not saved. Reload before trying again.');}finally{setBusy(false)}}
+ async function pause(){setBusy(true);try{const r=await workspaceFetch('/api/workflow',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused:!data?.paused})});if(!r.ok)throw Error();await load();}catch{setError('Pause was not saved. Reload before trying again.');}finally{setBusy(false)}}
  const jobs=Object.values(data?.jobs||{}),job=selected?data?.jobs[selected]:null;
  return <div className="workspace"><header className="topbar"><a className="brand" href="/">← Job workspace</a><span className="privacy">Private workspace</span></header><main className="main"><div className="heading"><div><h1>Application queue <span className="total">{jobs.length}</span></h1><p>{data?.mode==='supervised_pilot'?'Supervised pilot · Per-form approval required':'Dry run · External applications disabled'}</p></div><button className="primary" disabled={!data||busy} onClick={pause}>{busy?'Saving…':data?.paused?'Resume dry-run queue':'Pause queue'}</button></div>
  {error&&<div className="error" role="alert">{error} <button onClick={load}>Retry</button></div>}

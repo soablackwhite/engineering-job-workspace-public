@@ -16,6 +16,7 @@ next-env.d.ts
 # Private operator data: no document exception
 /.private/
 /.env*
+/.dev.vars*
 !/.env.example
 /workflow/runtime/
 /workflow/templates/*.json

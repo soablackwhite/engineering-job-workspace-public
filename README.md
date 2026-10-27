@@ -17,6 +17,21 @@ The included selection-policy example illustrates FDE/Solutions Engineer targeti
 
 See [architecture](ARCHITECTURE.md), [private setup](docs/PRIVATE_SETUP.md), [operations](docs/OPERATIONS.md) and [privacy](docs/PRIVACY.md).
 
+## Run on your laptop
+
+Install Node.js 24, then:
+
+```sh
+git clone https://github.com/soablackwhite/engineering-job-workspace-public.git
+cd engineering-job-workspace-public
+npm ci
+npm run local
+```
+
+Open **http://127.0.0.1:4310/setup**. A short, resumable guide walks through your selected Obsidian/Markdown notes, a PDF CV, search preferences and Codex. It creates private local storage automatically—no hosting account or API key is needed for setup. Codex uses your existing Codex setup and a generated MCP connection command. You finish only after the storage, notes, PDF and live Codex checks pass.
+
+The local database, documents and configuration stay under ignored `.private/` storage. Source notes are selected snapshots, not live vault synchronization. When Codex reads those notes, their contents go to the model provider running your session. Applications remain paused after onboarding, with factual review, per-job gates and authorization still required. See the [laptop setup guide](docs/LOCAL_SETUP.md) for connection details and the local trust boundary.
+
 ## Development
 
 Use Node.js 24 and Python 3.12 or later:
@@ -33,7 +48,7 @@ npm run check:types
 npm run build
 ```
 
-`npm run dev` provides an empty local UI preview. Hosted APIs require a configured authentication boundary and storage bindings; an unconfigured clone must not expose private state. This is a source toolkit, not a hosted multi-user service or a promise of portable provider authentication. See private setup for the deployment boundary.
+`npm run dev` provides an unconfigured development preview; `npm run local` starts the laptop gateway and onboarding. Hosted APIs still require a separately configured authentication boundary and storage bindings. Local mode is a single-operator tool for a trusted personal computer, not a shared-server login system. See private setup for the hosted deployment boundary.
 
 Tests generate disposable synthetic documents and state. CI has read-only repository permissions and runs privacy checks, tests and a build only. It does not deploy, upload private artifacts, connect to a mailbox or operate application forms.
 

@@ -12,7 +12,7 @@ class PublicGuardTests(unittest.TestCase):
     def test_personal_document_and_export_paths_are_rejected(self):
         for path in ('.private/profile.json', 'resume.pdf', 'notes.tex', 'mail.eml',
                      '.openai/hosting.json', 'state.sqlite', 'screenshots/form.png',
-                     '.env.production', 'workflow/templates/master-manifest.json',
+                     '.env.production', '.dev.vars', 'workflow/templates/master-manifest.json',
                      'node_modules', '.venv', 'dist/server/index.js'):
             with self.subTest(path=path):
                 self.assertTrue(guard.path_findings(path))

@@ -46,6 +46,8 @@ def path_findings(path: str) -> list[str]:
         found.append('private_document_or_export')
     if p.name.startswith('.env') and p.name != '.env.example':
         found.append('private_environment')
+    if p.name.startswith('.dev.vars') and not p.name.endswith('.example'):
+        found.append('private_environment')
     if p.name.endswith('.tsbuildinfo'):
         found.append('generated_build_metadata')
     if p.name in {'id_rsa', 'id_ed25519', 'master-manifest.json'}:

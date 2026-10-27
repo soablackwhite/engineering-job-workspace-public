@@ -13,7 +13,8 @@
     "format": "oxfmt",
     "db:generate": "drizzle-kit generate",
     "check:types": "tsc --noEmit --incremental false",
-    "test:node": "node --import tsx --import ./workflow/test-network-off.mjs --test tests/*.test.mjs workflow/tests/*.test.mjs workflow/tests/*.test.ts"
+    "test:node": "node --import tsx --import ./workflow/test-network-off.mjs --test tests/*.test.mjs workflow/tests/*.test.mjs workflow/tests/*.test.ts",
+    "local": "node scripts/local.mjs"
   },
   "dependencies": {
     "react": "19.2.6",
