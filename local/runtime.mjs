@@ -3,6 +3,7 @@ import {randomBytes, timingSafeEqual} from 'node:crypto';
 import {mkdir, readFile, writeFile, rename, chmod, lstat} from 'node:fs/promises';
 import path from 'node:path';
 import {ConnectorError} from './connectors.mjs';
+import {pickFolder as nativePickFolder,FolderPickerError} from './folder-picker.mjs';
 import {tools as workspaceTools} from '../lib/cloud-mcp.ts';
 
 const steps = ['welcome', 'sources', 'resume', 'preferences', 'codex', 'review', 'complete'];
@@ -113,9 +114,9 @@ function validPreferences(values) {
 
 /**
  * Creates state only; does not register Codex, read a vault or enable applications.
- * @param {{root:string, port?:number, connectors?:any, bootstrapStorage?:(context:{root:string,directory:string})=>Promise<void>}} options
+ * @param {{root:string, port?:number, connectors?:any, bootstrapStorage?:(context:{root:string,directory:string})=>Promise<void>,pickFolder?:()=>Promise<string|null>}} options
  */
-export async function createLocalRuntime({root, port = 4310, connectors: suppliedConnectors, bootstrapStorage = bootstrapLocalStorage}) {
+export async function createLocalRuntime({root, port = 4310, connectors: suppliedConnectors, bootstrapStorage = bootstrapLocalStorage, pickFolder = nativePickFolder}) {
   root = path.resolve(root);
   if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) throw new SetupError('Choose a local port from 1024 to 65535.');
   const directory = path.join(root, '.private');
@@ -161,6 +162,7 @@ export async function createLocalRuntime({root, port = 4310, connectors: supplie
   }
   await refreshInputs();
   let mutation = Promise.resolve();
+  let pickerOpen = false;
   const update = operation => {
     const result = mutation.then(async () => {
       const next = structuredClone(state);
@@ -212,6 +214,27 @@ export async function createLocalRuntime({root, port = 4310, connectors: supplie
     },
   });
   async function setup(action) {
+    if (action.action === 'choose_source') {
+      await mutation;
+      if (!Number.isSafeInteger(action.revision) || action.revision !== state.revision) throw new SetupError('Setup changed. Your latest progress has been reloaded.', 'REVISION_CONFLICT', 409);
+      if (pickerOpen) throw new SetupError('A folder window is already open. Choose a folder or cancel that window first.', 'FOLDER_PICKER_BUSY', 423);
+      pickerOpen = true;
+      try {
+        const selected = await pickFolder();
+        if (selected === null) return {...status(), cancelled: true};
+        await mutation;
+        if (action.revision !== state.revision) throw new SetupError('Setup changed while the folder chooser was open. Please choose the folder again.', 'REVISION_CONFLICT', 409);
+        const discovery = await connectors.discoverSource(selected);
+        await update(next => {
+          if (action.revision !== state.revision) throw new SetupError('Setup changed. Your latest progress has been reloaded.', 'REVISION_CONFLICT', 409);
+          next.source = {...discovery, selectedCount: 0, selected: []};
+          next.step = 'sources'; next.completed = false;
+          if (!next.visited.includes('sources')) next.visited.push('sources');
+        });
+        await refreshInputs();
+        return status();
+      } finally { pickerOpen = false; }
+    }
     await update(async next => {
       if (!Number.isSafeInteger(action.revision) || action.revision !== state.revision) throw new SetupError('Setup changed. Your latest progress has been reloaded.', 'REVISION_CONFLICT', 409);
       const advance = step => { next.step = step; if (!next.visited.includes(step)) next.visited.push(step); next.completed = false; };
@@ -226,7 +249,7 @@ export async function createLocalRuntime({root, port = 4310, connectors: supplie
         else throw new SetupError('Finish this step before continuing.', 'STEP_INCOMPLETE', 422);
       } else if (action.action === 'source') {
         if (typeof action.path !== 'string' || !action.path.trim()) throw new SetupError('Choose a notes folder.');
-        const discovery = await connectors.discoverSource(action.path.trim());
+        const discovery = await connectors.discoverSource(action.path);
         if (action.selected !== undefined) {
           if (!Array.isArray(action.selected) || !action.selected.length || action.selected.some(v => typeof v !== 'string')) throw new SetupError('Select at least one note.');
           const displayed = new Set(discovery.notes.map(note => note.path));
@@ -265,6 +288,7 @@ export async function createLocalRuntime({root, port = 4310, connectors: supplie
   function errorResponse(response, error) {
     if (error instanceof SetupError) return respond(response, error.status, {error: error.message, code: error.code});
     if (error instanceof ConnectorError) return respond(response, 422, {error: error.message, code: error.code});
+    if (error instanceof FolderPickerError) return respond(response, error.status, {error: error.message, code: error.code});
     // Do not return filesystem paths, note content, tokens or subprocess output.
     return respond(response, 422, {error: 'This step could not be verified. Check the selected file or folder and try again.', code: 'VERIFICATION_FAILED'});
   }

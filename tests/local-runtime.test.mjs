@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {Readable} from 'node:stream';
 import {authorizeLocalRequest,createLocalRuntime} from '../local/runtime.mjs';
+import {FolderPickerError} from '../local/folder-picker.mjs';
 
 const security = {origin: 'http://127.0.0.1:4310', sessionToken: 'synthetic-session', csrfToken: 'synthetic-csrf', mcpToken: 'synthetic-bridge'};
 const request = (headers = {}, method = 'GET', url = '/api/setup', data) => {
@@ -36,21 +37,22 @@ test('MCP uses a private bearer and cannot inherit browser or cross-origin acces
   assert.doesNotThrow(() => authorizeLocalRequest(request({authorization: 'Bearer ' + security.mcpToken}), security, {mcp: true}));
 });
 
-async function fixture(t, {bootstrapStorage = async () => {}} = {}) {
+async function fixture(t, {bootstrapStorage = async () => {}, pickFolder = async () => null} = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'workspace-runtime-test-'));
   t.after(async () => { await rm(root, {recursive: true, force: true}); });
   let dispatcherOptions;
   const valid = {source: true, resume: true};
-  const runtime = await createLocalRuntime({root, bootstrapStorage, connectors: {
+  const calls = {discover: [], snapshot: 0};
+  const runtime = await createLocalRuntime({root, bootstrapStorage, pickFolder, connectors: {
     codexCommand: () => 'codex mcp add job-workspace -- node synthetic-bridge.mjs',
-    discoverSource: async input => ({root: input, label: 'Example notes', noteCount: 2, notes: [{path: 'career.md', title: 'Example career'}]}),
-    snapshotSource: async (_private, sourceRoot, selected) => ({root: sourceRoot, label: 'Example notes', noteCount: 2, selectedCount: selected.length, notes: selected.map(name => ({path: name, title: 'Example career'})), snapshotId: 'synthetic-snapshot'}),
+    discoverSource: async input => { calls.discover.push(input); return {root: input, label: 'Example notes', noteCount: 2, notes: [{path: 'career.md', title: 'Example career'}]}; },
+    snapshotSource: async (_private, sourceRoot, selected) => { calls.snapshot++; return {root: sourceRoot, label: 'Example notes', noteCount: 2, selectedCount: selected.length, notes: selected.map(name => ({path: name, title: 'Example career'})), snapshotId: 'synthetic-snapshot'}; },
     storeResume: async () => ({name: 'example-resume.pdf', sha256: 'a'.repeat(64), bytes: 12}),
     validateSourceSnapshot: async () => { if (!valid.source) throw Error('Synthetic missing source'); return {snapshotId: 'synthetic-snapshot', selectedCount: 1}; },
     approvedResume: async () => { if (!valid.resume) throw Error('Synthetic changed resume'); return {name: 'example-resume.pdf', sha256: 'a'.repeat(64), bytes: 12}; },
     createMcpDispatcher: (_private, options) => { dispatcherOptions = options; return async () => ({jsonrpc: '2.0', id: 1, result: {}}); },
   }});
-  return {runtime, root, valid, get dispatcherOptions() { return dispatcherOptions; }};
+  return {runtime, root, valid, calls, get dispatcherOptions() { return dispatcherOptions; }};
 }
 
 function response() {
@@ -184,4 +186,70 @@ test('private root cannot be a symlink', async t => {
   const target = path.join(root, 'target'); await mkdir(target);
   await symlink(target, path.join(root, '.private'));
   await assert.rejects(createLocalRuntime({root}), error => error.code === 'UNSAFE_STORAGE');
+});
+
+test('native folder selection discovers names only and waits for explicit note confirmation', async t => {
+  let pickerCalls = 0;
+  const {runtime, calls} = await fixture(t, {pickFolder: async (...args) => { pickerCalls++; assert.equal(args.length, 0); return '/synthetic/selected-notes'; }});
+  const result = await runtime.setup({action: 'choose_source', revision: 0, path: 'ignored browser input'});
+  assert.equal(pickerCalls, 1); assert.deepEqual(calls.discover, ['/synthetic/selected-notes']); assert.equal(calls.snapshot, 0);
+  assert.equal(result.revision, 1); assert.equal(result.step, 'sources'); assert.equal(result.source.path, '/synthetic/selected-notes');
+  assert.deepEqual(result.source.selected, []); assert.equal(result.source.selectedCount, 0); assert.equal(result.checks.source.status, 'pending');
+  assert.equal(result.paused, true);
+});
+
+test('cancelled native selection preserves saved progress, selections and revision', async t => {
+  const {runtime, calls} = await fixture(t);
+  await runtime.setup({action: 'source', path: '/synthetic/old-notes', selected: ['career.md'], revision: 0});
+  const before = runtime.status(), saved = JSON.stringify(before);
+  const result = await runtime.setup({action: 'choose_source', revision: before.revision});
+  assert.equal(result.cancelled, true); delete result.cancelled;
+  assert.equal(JSON.stringify(result), saved); assert.equal(runtime.status().revision, before.revision);
+  assert.equal(calls.discover.length, 1); assert.equal(calls.snapshot, 1);
+});
+
+test('native folder whitespace is preserved when confirming selected notes', async t => {
+  const selectedPath = '/synthetic/notes ';
+  const {runtime, calls} = await fixture(t, {pickFolder: async () => selectedPath});
+  const discovered = await runtime.setup({action: 'choose_source', revision: 0});
+  const confirmed = await runtime.setup({action: 'source', path: discovered.source.path, selected: ['career.md'], revision: discovered.revision});
+  assert.deepEqual(calls.discover, [selectedPath, selectedPath]);
+  assert.equal(calls.snapshot, 1); assert.equal(confirmed.source.path, selectedPath);
+  assert.equal(confirmed.step, 'resume');
+});
+
+test('stale revisions and failed authentication cannot open a native dialog', async t => {
+  let calls = 0;
+  const {runtime} = await fixture(t, {pickFolder: async () => { calls++; return null; }});
+  await assert.rejects(runtime.setup({action: 'choose_source', revision: 99}), error => error.code === 'REVISION_CONFLICT');
+  const denied = response();
+  const payload = {action: 'choose_source', revision: 0};
+  await runtime.middleware(request({'Content-Type': 'application/json'}, 'POST', '/api/setup', payload), denied, () => assert.fail('unauthorized request forwarded'));
+  assert.equal(denied.statusCode, 401); assert.equal(calls, 0);
+  const withoutCsrf = response();
+  await runtime.middleware(request({cookie: 'job_workspace_session=' + runtime.security.sessionToken,
+    origin: runtime.origin, 'content-type': 'application/json'}, 'POST', '/api/setup', payload), withoutCsrf, () => assert.fail('unproved request forwarded'));
+  assert.equal(withoutCsrf.statusCode, 403); assert.equal(calls, 0);
+});
+
+test('one picker is allowed and a changed revision cannot be overwritten when it returns', async t => {
+  let resolvePicker, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const waiting = new Promise(resolve => { resolvePicker = resolve; });
+  const {runtime, calls} = await fixture(t, {pickFolder: async () => { entered(); return waiting; }});
+  const first = runtime.setup({action: 'choose_source', revision: 0});
+  await started;
+  await assert.rejects(runtime.setup({action: 'choose_source', revision: 0}), error => error.code === 'FOLDER_PICKER_BUSY' && error.status === 423);
+  await runtime.setup({action: 'continue', revision: 0});
+  resolvePicker('/synthetic/stale-selection');
+  await assert.rejects(first, error => error.code === 'REVISION_CONFLICT');
+  assert.equal(runtime.status().step, 'sources'); assert.equal(runtime.status().revision, 1); assert.equal(runtime.status().source, undefined);
+  assert.equal(calls.discover.length, 0);
+});
+
+test('native chooser errors remain controlled and do not leave the picker busy', async t => {
+  let calls = 0;
+  const {runtime} = await fixture(t, {pickFolder: async () => { if (++calls === 1) throw new FolderPickerError('The chooser is not available.', 'FOLDER_PICKER_UNAVAILABLE', 503); return null; }});
+  await assert.rejects(runtime.setup({action: 'choose_source', revision: 0}), error => error.code === 'FOLDER_PICKER_UNAVAILABLE');
+  assert.equal((await runtime.setup({action: 'choose_source', revision: 0})).cancelled, true);
 });

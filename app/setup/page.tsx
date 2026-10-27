@@ -7,7 +7,7 @@ import './onboarding.css';
 type Step = 'welcome' | 'sources' | 'resume' | 'preferences' | 'codex' | 'review' | 'complete';
 type CheckState = {status: 'ready' | 'pending' | 'error'; detail?: string};
 type SetupState = {
-  mode: 'local'; revision: number; step: Step; completed: boolean; csrfToken: string;
+  mode: 'local'; revision: number; step: Step; completed: boolean; csrfToken: string; cancelled?: boolean;
   checks: Record<'storage' | 'source' | 'resume' | 'codex', CheckState>;
   source?: {label?: string; path?: string; noteCount?: number; selectedCount?: number; selected?: string[]; notes?: {path: string; title?: string}[]};
   resume?: {name: string; sha256?: string};
@@ -58,12 +58,16 @@ export default function SetupPage() {
   const [preferenceQuestion, setPreferenceQuestion] = useState(0), [selectedRoles, setSelectedRoles] = useState<string[]>([]), [selectedPlaces, setSelectedPlaces] = useState<string[]>([]);
   const [customRole, setCustomRole] = useState(''), [customPlace, setCustomPlace] = useState(''), [sponsorship, setSponsorship] = useState<boolean | null>(null), [salary, setSalary] = useState('');
   const inputRef = useRef<HTMLInputElement>(null), titleRef = useRef<HTMLHeadingElement>(null);
-  const hydrated = useRef(false);
+  const hydrated = useRef(false), sourceIdentity = useRef<string | null>(null);
 
   function accept(next: SetupState) {
     setState(next);
+    const identity = JSON.stringify({path: next.source?.path || '', notes: next.source?.notes || [], selected: next.source?.selected || []});
+    if (sourceIdentity.current !== identity) {
+      setSourcePath(next.source?.path || ''); setSelectedNotes(next.source?.selected || []); setNotesQuery('');
+      sourceIdentity.current = identity;
+    }
     if (!hydrated.current) {
-      setSourcePath(next.source?.path || ''); setSelectedNotes(next.source?.selected || []);
       setSelectedRoles(next.preferences?.roles || []); setSelectedPlaces(next.preferences?.locations || []);
       setSponsorship(next.preferences ? next.preferences.sponsorship : null); setSalary(next.preferences?.salary ? String(next.preferences.salary) : '');
       hydrated.current = true;
@@ -111,6 +115,13 @@ export default function SetupPage() {
   const complete = !!state?.completed && allReady;
   const visibleNotes = (state?.source?.notes || []).filter(note => `${note.title || ''} ${note.path}`.toLowerCase().includes(notesQuery.toLowerCase()));
 
+  async function chooseFolder() {
+    const next = await send('choose_source');
+    if (!next || next.cancelled) return;
+    setSourcePath(next.source?.path || '');
+    setSelectedNotes([]); setNotesQuery('');
+  }
+
   function chooseResume(file?: File) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) {setError('Choose a PDF copy of your CV.'); return;}
@@ -150,6 +161,7 @@ export default function SetupPage() {
   }
   const proceed = (label: string, action: () => void, disabled = false) => <button type="button" className="setup-next" onClick={action} disabled={disabled || busy}>{busy ? <><LoaderCircle size={18} className="setup-spin"/> Saving…</> : <>{label}<ArrowRight size={18}/></>}</button>;
   const title = (eyebrow: string, heading: string, description: string) => <div className="setup-question-heading"><div className="setup-eyebrow">{eyebrow}</div><h1 ref={titleRef} tabIndex={-1}>{heading}</h1><p>{description}</p></div>;
+  const manualSourcePath = () => <details className="setup-advanced-path"><summary>Enter a path instead</summary><form onSubmit={(event: FormEvent) => {event.preventDefault(); setSelectedNotes([]); setNotesQuery(''); void send('source', {path: sourcePath.trim()});}}><label htmlFor="source-path" className="setup-label">Folder location</label><div className="setup-path-input"><FolderOpen size={19}/><input id="source-path" placeholder="Folder location" value={sourcePath} onChange={event => setSourcePath(event.target.value)} autoComplete="off" spellCheck={false} required/></div><button type="submit" className="setup-outline-button" disabled={!sourcePath.trim() || busy}>Find notes</button></form></details>;
 
   return <div className="setup-shell">
     <header className="setup-header"><a href="/" className="setup-brand" aria-label="Job workspace home"><span className="setup-brand-mark"><span/><span/></span>Job workspace</a><span className="setup-local"><span/>On your laptop<LockKeyhole size={13}/></span></header>
@@ -180,11 +192,17 @@ export default function SetupPage() {
             <div className="setup-actions">{proceed('Make it yours', () => void send('continue'))}<span className="setup-gentle-note">You can leave and come back.</span></div>
           </> : activeStep === 'sources' ? <>
             {title('YOUR KNOWLEDGE', state.source?.notes?.length ? 'Choose the notes that tell your story.' : 'Where do your career notes live?', state.source?.notes?.length ? 'Select only the notes you want Codex to use. Your other files stay outside this workspace.' : 'Connect an Obsidian vault or a folder of Markdown notes. You’ll choose exactly which notes to include next.')}
-            {!state.source?.notes?.length ? <form onSubmit={(event: FormEvent) => {event.preventDefault(); setSelectedNotes([]); setNotesQuery(''); void send('source', {path: sourcePath.trim()});}}><label htmlFor="source-path" className="setup-label">Folder location</label><div className="setup-path-input"><FolderOpen size={19}/><input id="source-path" placeholder="Paste the path to your notes folder" value={sourcePath} onChange={event => setSourcePath(event.target.value)} autoComplete="off" spellCheck={false} required/></div><p className="setup-help">In Obsidian, find your vault folder from the vault switcher. Connecting a folder doesn’t select all its notes.</p><div className="setup-actions"><button type="button" className="setup-text-button" onClick={() => void back()} disabled={busy}><ArrowLeft size={16}/>Back</button><button type="submit" className="setup-next" disabled={!sourcePath.trim() || busy}>{busy ? <LoaderCircle size={18} className="setup-spin"/> : <>Find notes<ArrowRight size={18}/></>}</button></div></form> : <>
-              <div className="setup-source-summary"><span className="setup-small-icon"><FolderOpen size={19}/></span><div><strong>{state.source.label || 'Your notes folder'}</strong><span>{state.source.noteCount || state.source.notes.length} notes found</span></div><button className="setup-inline-link" onClick={() => {setState({...state, source: {...state.source, notes: []}}); setSelectedNotes([]); setNotesQuery('');}}>Change folder</button></div>
+            {!state.source?.notes?.length ? <>
+              <div className="setup-folder-choice"><span className="setup-folder-symbol"><FolderOpen size={30}/></span><h2>Your notes, one folder away.</h2><p>Choose your Obsidian vault or a folder of Markdown notes.</p><button type="button" className="setup-next" onClick={() => void chooseFolder()} disabled={busy}>{busy ? <><LoaderCircle size={18} className="setup-spin"/>Waiting for your folder…</> : <><FolderOpen size={18}/>Choose folder</>}</button></div>
+              <p className="setup-help"><LockKeyhole size={13}/>Opens your laptop’s folder window. You’ll choose which notes to include next.</p>
+              {manualSourcePath()}
+              <div className="setup-actions"><button type="button" className="setup-text-button" onClick={() => void back()} disabled={busy}><ArrowLeft size={16}/>Back</button></div>
+            </> : <>
+              <div className="setup-source-summary"><span className="setup-small-icon"><FolderOpen size={19}/></span><div><strong>{state.source.label || 'Your notes folder'}</strong><span>{state.source.noteCount || state.source.notes.length} notes found</span></div><button type="button" className="setup-inline-link" onClick={() => void chooseFolder()} disabled={busy}>{busy ? 'Choosing…' : 'Change folder'}</button></div>
+              {manualSourcePath()}
               <div className="setup-note-toolbar"><input aria-label="Find a note" value={notesQuery} onChange={event => setNotesQuery(event.target.value)} placeholder="Find a note…"/><button type="button" onClick={() => setSelectedNotes(selectedNotes.length === state.source?.notes?.length ? [] : state.source?.notes?.map(note => note.path) || [])}>{selectedNotes.length === state.source.notes.length ? 'Clear selection' : 'Select all'}</button></div>
               <div className="setup-note-list">{visibleNotes.length ? visibleNotes.map(note => <label className="setup-note" key={note.path}><input type="checkbox" checked={selectedNotes.includes(note.path)} onChange={() => setSelectedNotes(list => toggle(list, note.path))}/><FileText size={18}/><span><strong>{note.title || note.path.split('/').pop()}</strong><small>{note.path}</small></span></label>) : <p className="setup-note-empty">No notes match that search.</p>}</div>
-              <p className="setup-help"><LockKeyhole size={13}/>Only selected notes are copied into your private workspace snapshot.</p><div className="setup-actions"><button className="setup-text-button" onClick={() => void back()} disabled={busy}><ArrowLeft size={16}/>Back</button>{proceed(`Use ${selectedNotes.length} ${selectedNotes.length === 1 ? 'note' : 'notes'}`, () => void send('source', {path: sourcePath || state.source?.path, selected: selectedNotes}), !selectedNotes.length)}</div>
+              <p className="setup-help"><LockKeyhole size={13}/>Only selected notes are copied into your private workspace snapshot.</p><div className="setup-actions"><button className="setup-text-button" onClick={() => void back()} disabled={busy}><ArrowLeft size={16}/>Back</button>{proceed(`Use ${selectedNotes.length} ${selectedNotes.length === 1 ? 'note' : 'notes'}`, () => void send('source', {path: state.source?.path || sourcePath, selected: selectedNotes}), !selectedNotes.length)}</div>
             </>}
           </> : activeStep === 'resume' ? <>
             {title('YOUR CV', 'Which CV should we use?', 'Add the PDF you want employers to receive. We’ll keep this copy fixed until you choose to replace it.')}

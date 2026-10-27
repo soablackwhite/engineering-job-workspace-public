@@ -17,7 +17,9 @@ Open the local setup address printed in the terminal and leave that process runn
 
 ## Connect your sources
 
-Choose the folder containing the career notes you want to use. The workspace lists Markdown filenames without importing their bodies. Select the specific notes to share, then confirm. Only that selection is copied into an ignored private snapshot; your original Obsidian files are never modified. Hidden files and linked notes are excluded. Choose a smaller career-notes folder for a large vault.
+Click **Choose folder** to open your laptop's native folder-selection window, then select your Obsidian vault or Markdown folder. Cancelling leaves your saved setup unchanged. The workspace lists Markdown filenames without importing their bodies. Select the specific notes to share, then confirm. Only that selection is copied into an ignored private snapshot; your original Obsidian files are never modified. Hidden files and linked notes are excluded. Choose a smaller career-notes folder for a large vault.
+
+The picker uses the laptop's desktop: macOS folder chooser, Windows folder browser, or Zenity/KDialog on Linux. Headless setups can use the optional **Enter a path instead** control. No custom executable or shell command is accepted from the browser.
 
 Snapshots are deliberate copies, not live Obsidian synchronization. Refresh and review them after changing your notes. The source text remains unverified evidence until its factual claims are reviewed. A connected folder is not proof of any qualification or screening answer.
 
